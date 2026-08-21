@@ -838,7 +838,7 @@ static int run_add_form(NetworkProfile *p, const char *title)
         wattroff(win, COLOR_PAIR(cur == nfields ? CP_BTN_SEL : CP_BTN) | A_BOLD);
 
         /* Cancel button: highlighted when cur == nfields+1 */
-        wattron(win, COLOR_PAIR(cur == nfields+1 == ? CP_BTN_SEL : CP_BTN) | A_BOLD);
+        wattron(win, COLOR_PAIR(cur == nfields+1 ? CP_BTN_SEL : CP_BTN) | A_BOLD);
         mvwprintw(win, btn_row, can_x, " <Cancel> ");
         wattroff(win, COLOR_PAIR(cur == nfields+1 ? CP_BTN_SEL : CP_BTN) | A_BOLD);
 
@@ -968,11 +968,9 @@ static void screen_edit_connections(void)
                 const char *sub[] = { "Save changes", "Remove connection", "Cancel" };
                 int sc = run_menu("Apply changes", sub, 3, 8, 36);
                 if (!sc) {
-    l
-
                     /* Save: update profile, rewrite files           */
                     /* Remove old iwd profile if SSID changed        */
-                    if (strcmp(profiles[sel].ssid, edited.ssid) != 0)
+                    if (strcmp(profiles[sel].ssid, edited.ssid))
                         delete_iwd_profile(profiles[sel].ssid);
                     profiles[sel] = edited;
                     write_iwd_profile(&edited);
@@ -1098,9 +1096,9 @@ static void screen_main(void)
 
         int sel = run_menu("iwmenu", items, nitems, 10, 40);
 
-        if (!sel) {
+        if (sel == 0) {
             screen_edit_connections();
-        } else if (sel) {
+        } else if (sel == 1) {
             screen_activate_connections();
         } else {
             /* Quit or ESC */
@@ -1148,17 +1146,16 @@ int main(void)
             char line[256];
             while (fgets(line, sizeof(line), pipe)) {
                 /* Look for "Connected network" line in iwctl output         */
-                if (strstr(line, "Connected network")) {
+                char *p = strstr(line, "Connected network");
                     /* Extract the SSID from the line                        */
-                    char *p = strrchr(line, ' ');  /* Last space before SSID */
-                    if (p && *(p+1)) {
-                        char ssid[MAX_STR] = {0};
-                        strncpy(ssid, p + 1, sizeof(ssid) - 1);
+                    char cmd_buf[128];
+snprintf(cmd_buf, sizeof(cmd_buf), "iwctl station %s show 2>/dev/null", DEFAULT_DEVICE);
+FILE *pipe = popen(cmd_buf, "r");
                         trim(ssid);                /* Remove trailing newline */
                         /* Find matching profile */
                         int i;
                         for (i = 0; i < nprofiles; i++) {
-                            if (!strcmp(profiles[i].ssid, ssid) {
+                            if (!strcmp(profiles[i].ssid, ssid)) {
                                 connected_idx = i;
                                 break;
                             }
