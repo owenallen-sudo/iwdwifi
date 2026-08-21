@@ -130,10 +130,10 @@ static int ensure_dir(const char *path)
 {
     struct stat st;
     /* stat() returns 0 if the path exists; S_ISDIR checks it is a directory */
-    if (stat(path, &st) == 0 && S_ISDIR(st.st_mode))
+    if (!stat(path, &st) && S_ISDIR(st.st_mode))
         return 0;                           /* Already exists — nothing to do */
     /* mkdir returns -1 on failure; EEXIST means another process beat us to it*/
-    if (mkdir(path, 0755) != 0 && errno != EEXIST)
+    if (mkdir(path, 0755) && errno != EEXIST)
         return -1;                          /* Real failure — propagate error  */
     return 0;
 }
@@ -220,7 +220,7 @@ static void read_config(void)
         if (line[0] == '#' || line[0] == '\0')
             continue;                         /* Skip comments + blank lines  */
 
-        if (strcmp(line, "[network]") == 0) { /* Start of a new profile block */
+        if (!strcmp(line, "[network]")) { /* Start of a new profile block */
             if (nprofiles < MAX_NETWORKS) {
                 cur = &profiles[nprofiles++]; /* Advance to next free slot    */
                 memset(cur, 0, sizeof(*cur)); /* Zero all fields in the slot  */
@@ -294,7 +294,7 @@ static void write_iwd_profile(const NetworkProfile *p)
 {
     char path[600];
     /* Determine file extension: open networks use .open, WPA2 uses .psk    */
-    int is_open = (p->password[0] == '\0');
+    int is_open = ('\0' == p->password[0]);
 
     /* Build the full path, e.g. /var/lib/iwd/MyNetwork.psk                 */
     snprintf(path, sizeof(path), "%s/%s.%s",
@@ -387,7 +387,7 @@ static void write_networkd_config(const NetworkProfile *p)
 
     /* [Network] — IP layer settings                                         */
     fprintf(f, "[Network]\n");
-    const char *mode = (p->ip_mode[0] == '\0') ? "ipv4" : p->ip_mode;
+    const char *mode = ('\0' == p->ip_mode[0]) ? "ipv4" : p->ip_mode;
     if      (!strcmp(mode, "dual")) fprintf(f, "DHCP=yes\n");
     else if (!strcmp(mode, "ipv6")) fprintf(f, "DHCP=ipv6\n");
     else                            fprintf(f, "DHCP=ipv4\n");
@@ -619,14 +619,14 @@ static int get_string(WINDOW *win, int y, int x, int width,
 
         ch = wgetch(win);        /* Wait for a key press                    */
 
-        if (ch == 27) {          /* ESC — abort, leave buf unchanged        */
+        if (27 == ch) {          /* ESC — abort, leave buf unchanged        */
             return -1;
         } else if (ch == '\n' || ch == '\r' || ch == KEY_ENTER) {
             /* Confirm: copy working buffer to output buffer                */
             strncpy(buf, tmp, bufsz - 1);
             buf[bufsz - 1] = '\0';
             return 0;
-        } else if (ch == KEY_BACKSPACE || ch == 127 || ch == 8) {
+        } else if (ch == KEY_BACKSPACE || 127 == ch || 8 == ch) {
             /* Backspace: remove last character if any                      */
             if (len > 0)
                 tmp[--len] = '\0';
@@ -725,7 +725,7 @@ static int run_menu(const char *title, const char **items, int nitems,
             /* Confirm selection */
             delwin(win);
             return sel;
-        } else if (ch == 27) {          /* ESC — cancel */
+        } else if (27 == ch) {          /* ESC — cancel */
             delwin(win);
             return -1;
         }
@@ -817,7 +817,7 @@ static int run_add_form(NetworkProfile *p, const char *title)
             if (fwidth < 4) fwidth = 4;
 
             /* Draw the input field box, highlighted if focused */
-            int pair = (cur == i) ? CP_HILITE : CP_FIELD;
+            int pair = (i == cur) ? CP_HILITE : CP_FIELD;
             wattron(win, COLOR_PAIR(pair));
             /* Blank field background */
             mvwprintw(win, row, 2 + llen, "%-*s", fwidth, "");
@@ -838,7 +838,7 @@ static int run_add_form(NetworkProfile *p, const char *title)
         wattroff(win, COLOR_PAIR(cur == nfields ? CP_BTN_SEL : CP_BTN) | A_BOLD);
 
         /* Cancel button: highlighted when cur == nfields+1 */
-        wattron(win, COLOR_PAIR(cur == nfields+1 ? CP_BTN_SEL : CP_BTN) | A_BOLD);
+        wattron(win, COLOR_PAIR(cur == nfields+1 == ? CP_BTN_SEL : CP_BTN) | A_BOLD);
         mvwprintw(win, btn_row, can_x, " <Cancel> ");
         wattroff(win, COLOR_PAIR(cur == nfields+1 ? CP_BTN_SEL : CP_BTN) | A_BOLD);
 
@@ -867,13 +867,13 @@ static int run_add_form(NetworkProfile *p, const char *title)
                 /* OK button pressed — apply defaults, validate, confirm    */
 
                 /* Apply defaults for blank fields */
-                if (p->device[0] == '\0')
+                if ('\0' == p->device[0])
                     strncpy(p->device, DEFAULT_DEVICE, 63);
-                if (p->dns_primary[0] == '\0')
+                if ('\0' == p->dns_primary[0])
                     strncpy(p->dns_primary, DEFAULT_DNS1, 63);
-                if (p->mtu[0] == '\0')
+                if ('\0' == p->mtu[0])
                     strncpy(p->mtu, DEFAULT_MTU, 15);
-                if (p->ip_mode[0] == '\0')
+                if ('\0' == p->ip_mode[0])
                     strncpy(p->ip_mode, "ipv4", 7);
 
                 /* SSID is mandatory */
@@ -882,9 +882,9 @@ static int run_add_form(NetworkProfile *p, const char *title)
                 } else {
                     const char *modes[] = { "IPv4 only", "IPv6 only", "Dual (IPv4+IPv6)" };
                     int m = run_menu("IP Mode", modes, 3, 8, 30);
-                    if (m == 0)      strncpy(p->ip_mode, "ipv4", 7);
-                    else if (m == 1) strncpy(p->ip_mode, "ipv6", 7);
-                    else if (m == 2) strncpy(p->ip_mode, "dual", 7);
+                    if (0 == m)      strncpy(p->ip_mode, "ipv4", 7);
+                    else if (1 == m) strncpy(p->ip_mode, "ipv6", 7);
+                    else if (2 == m) strncpy(p->ip_mode, "dual", 7);
                     delwin(win);
                     return 0;            /* OK — profile is populated         */
                 }
@@ -893,7 +893,7 @@ static int run_add_form(NetworkProfile *p, const char *title)
                 delwin(win);
                 return -1;
             }
-        } else if (ch == 27) {           /* ESC — cancel immediately          */
+        } else if (27 == ch) {           /* ESC — cancel immediately          */
             delwin(win);
             return -1;
         }
@@ -940,7 +940,7 @@ static void screen_edit_connections(void)
         if (h < 10) h = 10;
 
         int sel = run_menu("Edit a connection", items, total, h, 54);
-        if (sel < 0 || sel == nprofiles + 1) return; /* Back or ESC          */
+        if (sel < 0 || nprofiles + 1 == sel) return; /* Back or ESC          */
 
         if (sel == nprofiles) {
             /* ── Add a new connection ──────────────────────────── */
@@ -950,7 +950,7 @@ static void screen_edit_connections(void)
             }
             NetworkProfile np;
             memset(&np, 0, sizeof(np)); /* Start with all fields blank       */
-            if (run_add_form(&np, "Add Connection") == 0) {
+            if (!run_add_form(&np, "Add Connection")) {
                 profiles[nprofiles++] = np; /* Append to profile array       */
                 write_iwd_profile(&np);     /* Create iwd profile file       */
                 write_config();             /* Persist our database           */
@@ -962,12 +962,14 @@ static void screen_edit_connections(void)
             NetworkProfile edited = profiles[sel];
             int action = run_add_form(&edited, "Edit Connection");
 
-            if (action == 0) {
+            if (!action) {
                 /* User pressed OK — also offer Remove option        */
                 /* We re-use a small sub-menu: Save / Remove / Cancel */
                 const char *sub[] = { "Save changes", "Remove connection", "Cancel" };
                 int sc = run_menu("Apply changes", sub, 3, 8, 36);
-                if (sc == 0) {
+                if (!sc) {
+    l
+
                     /* Save: update profile, rewrite files           */
                     /* Remove old iwd profile if SSID changed        */
                     if (strcmp(profiles[sel].ssid, edited.ssid) != 0)
@@ -976,11 +978,11 @@ static void screen_edit_connections(void)
                     write_iwd_profile(&edited);
                     write_config();
                     show_message("Connection updated.");
-                } else if (sc == 1) {
+                } else if (sc) {
                     /* Remove: delete files, shift array left        */
                     delete_iwd_profile(profiles[sel].ssid);
                     /* If we're removing the active connection, disconnect */
-                    if (sel == connected_idx) {
+                    if (connected_idx == sel) {
                         do_disconnect();
                     }
                     /* Adjust connected_idx if it was after the removed one*/
@@ -1027,7 +1029,7 @@ static void screen_activate_connections(void)
         }
 
         /* Add a separator-style entry and Back button */
-        if (nprofiles == 0) {
+        if (!nprofiles) {
             items[0] = "  (no saved connections)";
             items[1] = "< Back >";
             int sel2 = run_menu("Activate a connection", items, 2, 8, 54);
@@ -1047,7 +1049,7 @@ static void screen_activate_connections(void)
             /* User selected the currently connected network — disconnect    */
             const char *opts[] = { "Disconnect", "Cancel" };
             int c = run_menu("Disconnect?", opts, 2, 7, 30);
-            if (c == 0) {
+            if (!c) {
                 do_disconnect();
                 show_message("Disconnected.");
             }
@@ -1055,7 +1057,7 @@ static void screen_activate_connections(void)
             /* User selected a different network — connect to it             */
             const char *opts[] = { "Connect", "Cancel" };
             int c = run_menu("Connect?", opts, 2, 7, 30);
-            if (c == 0) {
+            if (!c) {
                 /* If something else is connected, disconnect first          */
                 if (connected_idx >= 0) do_disconnect();
                 do_connect(sel);
@@ -1096,9 +1098,9 @@ static void screen_main(void)
 
         int sel = run_menu("iwmenu", items, nitems, 10, 40);
 
-        if (sel == 0) {
+        if (!sel) {
             screen_edit_connections();
-        } else if (sel == 1) {
+        } else if (sel) {
             screen_activate_connections();
         } else {
             /* Quit or ESC */
@@ -1126,8 +1128,8 @@ int main(void)
 {
     /* ── 1. Root check ─────────────────────────────────────────────────── */
     /* getuid() returns 0 only for the root user                            */
-    if (getuid() != 0) {
-        fprintf(stderr, "iwmenu: must be run as root (sudo ./iwmenu)\n");
+    if (getuid()) {
+        fprintf(stderr, "iwdwifi: must be run as root (sudo ./iwmenu)\n");
         return 1;
     }
 
@@ -1156,7 +1158,7 @@ int main(void)
                         /* Find matching profile */
                         int i;
                         for (i = 0; i < nprofiles; i++) {
-                            if (strcmp(profiles[i].ssid, ssid) == 0) {
+                            if (!strcmp(profiles[i].ssid, ssid) {
                                 connected_idx = i;
                                 break;
                             }
